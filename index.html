@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Message for You</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            background-color: #e5e5e5;
+            font-family: 'Amiri', serif;
+            overflow: hidden; /* Prevent scrolling */
+            touch-action: none;
+        }
+
+        /* --- THE CARD MECHANICS (3D Flip) --- */
+        .perspective-container {
+            perspective: 1200px;
+        }
+        
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy professional feel */
+            transform-style: preserve-3d;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            border-radius: 16px;
+        }
+
+        .card-flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 8px solid white; /* Photo border effect */
+            background: white;
+        }
+
+        .card-back {
+            transform: rotateY(180deg);
+            background-color: #fffbf0; /* Warm paper color */
+            background-image: url("https://www.transparenttextures.com/patterns/cream-paper.png"); /* Subtle texture */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- THE ENVELOPE ANIMATION --- */
+        .envelope-container {
+            transition: transform 0.8s ease-in, opacity 0.8s ease-in;
+            z-index: 40;
+        }
+        .envelope-open {
+            transform: translateY(120vh) rotate(-5deg); /* Slide down and tilt */
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        /* --- ORIENTATION LOCK --- */
+        #orientation-warning { display: none; z-index: 100; }
+        
+        /* If Portrait (Vertical), show warning */
+        @media screen and (orientation: portrait) {
+            #orientation-warning { display: flex; }
+            #main-stage { display: none; }
+        }
+    </style>
+</head>
+<body class="bg-stone-200 h-screen w-screen flex items-center justify-center">
+
+    <div id="orientation-warning" class="fixed inset-0 bg-stone-900 text-white flex-col items-center justify-center text-center p-8">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-20 w-20 mb-6 animate-bounce text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+        <h2 class="text-3xl font-bold mb-4" style="direction: rtl;">Please Rotate Your Phone</h2>
+        <p class="text-stone-400 text-lg">This memory is best viewed in landscape.</p>
+    </div>
+
+    <div id="main-stage" class="relative w-full h-full max-w-5xl max-h-[650px] flex items-center justify-center p-4">
+        
+        <div id="envelope" class="envelope-container absolute inset-0 flex flex-col items-center justify-center bg-[#fdfdfd] shadow-2xl rounded-lg cursor-pointer border border-stone-200 m-6">
+            <div class="absolute top-8 right-8 w-20 h-24 border-4 border-stone-300 opacity-50 rotate-3"></div>
+            
+            <div class="text-center z-10">
+                <p class="text-stone-400 text-sm uppercase tracking-[0.2em] mb-4">A Farewell Message</p>
+                <h1 id="recipient-name" class="text-5xl md:text-7xl font-bold text-stone-800 mb-8" style="direction: rtl;">...</h1>
+                
+                <div class="mt-8 inline-block px-8 py-3 bg-stone-800 text-white rounded-full text-sm font-semibold tracking-wide shadow-lg hover:bg-black transition-colors">
+                    Click To Open
+                </div>
+            </div>
+        </div>
+
+        <div id="card-container" class="perspective-container w-full h-full cursor-pointer opacity-0 transition-opacity duration-700 delay-300">
+            <div class="card-inner" id="card-inner">
+                
+                <div class="card-front">
+                    <img src="group-sketch.jpg" class="w-full h-full object-cover" alt="Team Sketch">
+                    
+                    <div class="absolute bottom-6 right-6 bg-black/60 text-white px-4 py-2 rounded-full text-sm backdrop-blur-md flex items-center gap-2">
+                        <span>Tap to Flip</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    </div>
+                </div>
+
+                <div class="card-back p-4">
+                    <img id="note-image" src="" class="max-w-full max-h-full object-contain drop-shadow-md" alt="Handwritten Note">
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURATION: Add your friends here
+        // ==========================================
+        const recipients = {
+            "anwar": { 
+                name: "Anwar",           // The name shown on the envelope
+                file: "anwar.jpg"        // The filename of their note
+            }
+            // Add more lines here...
+        };
+
+        // ==========================================
+        // MAIN LOGIC
+        // ==========================================
+        const urlParams = new URLSearchParams(window.location.search);
+        const userKey = urlParams.get('to'); 
+        
+        // 1. THE GHOST CHECK
+        // If no user is specified, or user doesn't exist in list -> Show nothing.
+        if (!userKey || !recipients[userKey]) {
+            document.body.innerHTML = ""; // Wipe everything
+            // Optional: redirect to google or somewhere else
+            // window.location.href = "https://google.com";
+        } else {
+            // 2. LOAD DATA
+            const data = recipients[userKey];
+            document.getElementById('recipient-name').innerText = data.name;
+            document.getElementById('note-image').src = data.file;
+
+            // 3. ANIMATION HANDLERS
+            const envelope = document.getElementById('envelope');
+            const cardContainer = document.getElementById('card-container');
+            const cardInner = document.getElementById('card-inner');
+
+            // Open Envelope
+            envelope.addEventListener('click', () => {
+                envelope.classList.add('envelope-open');
+                cardContainer.classList.remove('opacity-0');
+                
+                // Hide envelope after it slides away so it doesn't block clicks
+                setTimeout(() => {
+                    envelope.style.display = 'none';
+                }, 800);
+            });
+
+            // Flip Card
+            cardContainer.addEventListener('click', () => {
+                cardInner.parentNode.classList.toggle('card-flipped');
+            });
+        }
+    </script>
+</body>
+</html>
