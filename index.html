@@ -30,6 +30,7 @@
             transform-style: preserve-3d;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             border-radius: 16px;
+            will-change: transform; /* Performance fix */
         }
 
         .card-flipped .card-inner {
@@ -46,6 +47,7 @@
             overflow: hidden;
             border: 8px solid white; /* Photo border effect */
             background: white;
+            will-change: transform; /* Performance fix */
         }
 
         .card-back {
@@ -90,12 +92,24 @@
         <p class="text-stone-500 text-sm">(Tap to dismiss or wait...)</p>
     </div>
 
+    <!-- Lightbox Overlay -->
+    <div id="lightbox" class="fixed inset-0 bg-black/95 z-[200] hidden flex-col items-center justify-center p-4 cursor-pointer transition-opacity duration-300 opacity-0">
+        <div class="absolute top-4 right-4 text-white hover:text-gray-300">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </div>
+        <img id="lightbox-img" src="" class="max-w-full max-h-full object-contain shadow-2xl rounded-sm" alt="Full Screen Note">
+        <p class="text-stone-400 mt-4 text-sm">Tap anywhere to close</p>
+    </div>
+
     <!-- Main Stage: constrained max-width for better card shape -->
     <div id="main-stage" class="relative w-full max-w-4xl flex items-center justify-center">
         
         <!-- Envelope -->
         <div id="envelope" class="envelope-container absolute inset-0 flex flex-col items-center justify-center bg-[#fdfdfd] shadow-2xl rounded-lg cursor-pointer border border-stone-200 z-50 h-[300px] md:h-[400px] w-full max-w-2xl mx-auto my-auto">
-            <div class="absolute top-8 right-8 w-16 h-20 border-4 border-stone-300 opacity-50 rotate-3"></div>
+            <!-- Stamp: Container rotated 25deg, Image inside rotated -90deg -->
+            <div class="absolute top-8 right-8 w-16 h-20 border-4 border-stone-300 shadow-sm rotate-12 overflow-hidden bg-stone-100 flex items-center justify-center">
+                <img src="group-sketch.jpg" class="w-[150%] h-[150%] max-w-none object-cover  opacity-80" alt="Stamp">
+            </div>
             
             <div class="text-center z-10 p-4">
                 <p class="text-stone-400 text-xs md:text-sm uppercase tracking-[0.2em] mb-4">A Farewell Message</p>
@@ -109,10 +123,10 @@
 
         <!-- 
             Card Container
-            Constrain aspect ratio to simulate a real photo card (approx 3:2 or similar).
-            We use 'aspect-[3/2]' or 'aspect-[4/3]'. Let's go with a flexible height but constrained aspect.
+            Aspect ratio will be set dynamically via JS based on the image content.
+            Defaulting to something reasonable just in case.
         -->
-        <div id="card-container" class="perspective-container w-full aspect-[3/2] max-h-[80vh] cursor-pointer opacity-0 transition-opacity duration-700 delay-300">
+        <div id="card-container" class="perspective-container w-full max-h-[80vh] cursor-pointer opacity-0 transition-opacity duration-700 delay-300">
             <div class="card-inner" id="card-inner">
                 
                 <div class="card-front">
@@ -124,8 +138,22 @@
                     </div>
                 </div>
 
-                <div class="card-back p-4">
+                <div class="card-back relative p-4 group">
                     <img id="note-image" src="" class="w-full h-full object-contain drop-shadow-md" alt="Handwritten Note">
+                    
+                    <!-- Expand Button Overlay -->
+                    <div id="expand-btn" class="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl">
+                         <div class="bg-black/70 text-white px-4 py-2 rounded-full backdrop-blur-md flex items-center gap-2 hover:scale-105 transition-transform">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                            </svg>
+                            <span class="text-sm font-semibold">Tap to Fullscreen</span>
+                        </div>
+                    </div>
+                    <!-- Always visible on mobile hint -->
+                    <div class="absolute bottom-2 right-2 md:hidden bg-black/50 text-white p-2 rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                    </div>
                 </div>
 
             </div>
@@ -141,6 +169,10 @@
             "anwar": { 
                 name: "Anwar",           // The name shown on the envelope
                 file: "anwar.jpg"        // The filename of their note
+            },
+            "mostafa": { 
+                name: "Mostafa",           // The name shown on the envelope
+                file: "mostafa.jpg"        // The filename of their note
             }
             // Add more lines here...
         };
@@ -158,11 +190,36 @@
             // 2. LOAD DATA
             const data = recipients[userKey];
             document.getElementById('recipient-name').innerText = data.name;
-            document.getElementById('note-image').src = data.file;
+            
+            const noteImg = document.getElementById('note-image');
+            const cardContainer = document.getElementById('card-container');
+            const lightbox = document.getElementById('lightbox');
+            const lightboxImg = document.getElementById('lightbox-img');
+            const expandBtn = document.getElementById('expand-btn');
+
+            // Set image source
+            noteImg.src = data.file;
+
+            // DYNAMIC FIT: Adjust card shape to match photo
+            noteImg.onload = function() {
+                const w = this.naturalWidth;
+                const h = this.naturalHeight;
+                
+                // If it's a portrait photo (taller than wide)
+                if (h > w) {
+                    // Use a vertical aspect ratio, e.g. 3:4 or just use the exact ratio
+                    cardContainer.style.aspectRatio = `${w} / ${h}`;
+                    cardContainer.style.maxWidth = "500px"; // Limit width so it doesn't get too huge vertically
+                } else {
+                    // Landscape
+                    cardContainer.style.aspectRatio = `${w} / ${h}`;
+                    cardContainer.style.maxWidth = "800px";
+                }
+            };
 
             // 3. ANIMATION HANDLERS
             const envelope = document.getElementById('envelope');
-            const cardContainer = document.getElementById('card-container');
+            // const cardContainer already defined above
             const cardInner = document.getElementById('card-inner');
             const warningCallback = document.getElementById('orientation-warning');
 
@@ -192,6 +249,19 @@
 
             // --- ENVELOPE OPEN ---
             envelope.addEventListener('click', () => {
+                // Attempt to go full screen
+                try {
+                    if (document.documentElement.requestFullscreen) {
+                        document.documentElement.requestFullscreen();
+                    } else if (document.documentElement.webkitRequestFullscreen) { /* Safari */
+                        document.documentElement.webkitRequestFullscreen();
+                    } else if (document.documentElement.msRequestFullscreen) { /* IE11 */
+                        document.documentElement.msRequestFullscreen();
+                    }
+                } catch (e) {
+                    console.log("Fullscreen blocked or not supported", e);
+                }
+
                 envelope.classList.add('envelope-open');
                 cardContainer.classList.remove('opacity-0');
                 
@@ -215,8 +285,58 @@
                 hasFlipped = true;
             }
 
-            cardContainer.addEventListener('click', () => {
-                triggerFlip();
+
+
+            // Consolidate click logic:
+            // 1. If clicking Expand Button -> Lightbox (handled by its own listener, but we stop warning propagation there)
+            // 2. If clicking Note (Back) -> Lightbox
+            // 3. Else -> Flip
+            
+            cardContainer.addEventListener('click', (e) => {
+               // Logic to check if we should expand or flip
+               const isFlipped = cardInner.parentNode.classList.contains('card-flipped');
+               // Check if the click target is the back-face image or within the back face
+               const clickedBack = e.target.closest('.card-back');
+               // Check if specific expand button was clicked (though it has its own listener, bubbling might reach here if not stopped)
+               const clickedExpand = e.target.closest('#expand-btn');
+
+               if (clickedExpand) {
+                   // Handled by expandBtn listener, do nothing here
+                   return;
+               }
+
+               if (isFlipped && clickedBack) {
+                   // If we are looking at the note, tap opens Lightbox
+                   openLightbox();
+               } else {
+                   // Otherwise (Front face, or margins), toggle flip
+                   triggerFlip();
+               }
+            });
+
+            // --- LIGHTBOX LOGIC ---
+            function openLightbox() {
+                lightboxImg.src = noteImg.src;
+                lightbox.style.display = 'flex';
+                // Small delay to allow display flex to apply before opacity transition
+                requestAnimationFrame(() => {
+                    lightbox.classList.remove('opacity-0');
+                });
+            }
+
+            function closeLightbox() {
+                lightbox.classList.add('opacity-0');
+                setTimeout(() => {
+                    lightbox.style.display = 'none';
+                }, 300);
+            }
+
+            lightbox.addEventListener('click', closeLightbox);
+            
+            // Also trigger lightbox from the dedicated button (redundant but safe)
+            expandBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openLightbox();
             });
         }
     </script>
